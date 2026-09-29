@@ -1,0 +1,213 @@
+# ============================================================================
+# drift-guard — 防止 references/ 与引擎实现漂移
+# ----------------------------------------------------------------------------
+# references/ 是手写文本，但描述的是引擎实现的契约。本工作流拉仓 1
+# （Shingwha/open-pptd）最新 release 的 runtime zip（无 release 时退回 main
+# tarball）解到临时目录，做五项只读比对（①–④ 为工单指定四项，⑤ 为随内容面
+# 迁入而保留的原 theme-presets 回归守护）：
+#   ① pptd.md §5 元素类型/必填字段 vs 引擎 style-spec.js + validate.js schema
+#   ② pptd.md §3 Theme 结构 vs theme-presets.js DEFAULT_THEME 键名
+#   ③ shapes.md 形状/连接线计数 vs preset-geometry.data.js 几何数据
+#   ④ design.md §4 字体注册名 vs assets/fonts/registry.json family 集合
+#   ⑤ design.md 预设色值表 vs theme-presets.js THEME_PALETTES（原 tests/regression/theme-presets.mjs §2）
+# 任一不符即 fail，并提示「references 需随引擎更新」。
+#
+# 纯只读：本仓与仓 1 之间零依赖（符合 integration-plan §3.8 / R1）。
+# 校验器写在 $RUNNER_TEMP（仓库外），本仓因此保持「零可执行文件」——仓 2
+# 只含 .md/.yml/.json/LICENSE 与 .github 工作流，不落任何脚本。
+# ============================================================================
+name: drift-guard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "references/**"
+      - "SKILL.md"
+      - ".github/workflows/drift-guard.yml"
+  pull_request:
+    paths:
+      - "references/**"
+      - "SKILL.md"
+      - ".github/workflows/drift-guard.yml"
+  schedule:
+    - cron: "0 3 * * 1" # 每周一 03:00 UTC：引擎发新版后即使本仓未动也能发现漂移
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 拉取引擎（release runtime zip，缺则退回 main tarball）
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          WORK="$RUNNER_TEMP/engine"
+          mkdir -p "$WORK"
+          URL=""
+          # ① 优先最新 release 的运行时 zip（与用户安装的是同一个产物）
+          API="https://api.github.com/repos/Shingwha/open-pptd/releases/latest"
+          URL=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" "$API" \
+            | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);const a=(j.assets||[]).find(x=>/^open-pptd-v.*\.zip$/.test(x.name));process.stdout.write(a?a.browser_download_url:"")})' \
+            || true)
+          if [ -n "$URL" ]; then
+            echo "使用 release 资产: $URL"
+            curl -fsSL "$URL" -o "$WORK/engine.zip"
+            unzip -q "$WORK/engine.zip" -d "$WORK/x"
+          else
+            # ② 退回 main tarball（含 packages/，用于尚未发布 release 时）
+            echo "::warning::未找到 release runtime zip，退回 main tarball"
+            curl -fsSL "https://github.com/Shingwha/open-pptd/archive/refs/heads/main.tar.gz" -o "$WORK/engine.tar.gz"
+            mkdir -p "$WORK/x"
+            tar -xzf "$WORK/engine.tar.gz" -C "$WORK/x"
+          fi
+          # 归一化：定位含 packages/model/style-spec.js 的目录为引擎根
+          ROOT=$(find "$WORK/x" -type f -path "*/packages/model/style-spec.js" | head -1 | sed 's#/packages/model/style-spec.js##')
+          [ -n "$ROOT" ] || { echo "::error::引擎包内未找到 packages/model/style-spec.js"; exit 1; }
+          echo "ENGINE_ROOT=$ROOT" >> "$GITHUB_ENV"
+
+      - name: 四项只读比对
+        run: |
+          set -euo pipefail
+          CHECKER="$RUNNER_TEMP/drift-check.mjs"
+          cat > "$CHECKER" <<'DRIFT_EOF'
+          import { readFileSync } from "node:fs";
+          import { join } from "node:path";
+          import { pathToFileURL } from "node:url";
+
+          const ENGINE = process.env.ENGINE_ROOT;
+          const REFS = process.cwd();
+          let failures = 0;
+          const fail = (m) => { console.log("::error::" + m); failures++; };
+          const ok = (m) => console.log("✓ " + m);
+          const read = (p) => readFileSync(join(REFS, p), "utf8");
+          const uniq = (a) => [...new Set(a)];
+          const eqSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
+
+          // ---- ① 元素类型 + 类型必填字段 ----
+          {
+            const styleSpec = await import(pathToFileURL(join(ENGINE, "packages/model/style-spec.js")).href);
+            const engineTypes = [...styleSpec.ELEMENT_TYPES].sort();
+            const pptd = read("references/pptd.md");
+            const s5 = pptd.slice(pptd.indexOf("## 5. Elements"));
+            const mdTypes = uniq([...s5.matchAll(/^###\s+([A-Za-z]+)\b/gm)].map((m) => m[1].toLowerCase()))
+              .filter((t) => t !== "elementbase").sort();
+            console.log("  engine types :", engineTypes.join(","));
+            console.log("  pptd §5 types:", mdTypes.join(","));
+            if (!eqSet(engineTypes, mdTypes)) fail("① pptd.md §5 元素类型集合与引擎 ELEMENT_TYPES 不一致");
+            else ok(`① 类型集合一致（${engineTypes.length}）`);
+
+            const validateSrc = readFileSync(join(ENGINE, "packages/model/validate.js"), "utf8");
+            const GENERIC = new Set(["elementType", "elementId", "bounds", "opacity", "extra", "elements", "pages"]);
+            const required = [];
+            for (const m of validateSrc.matchAll(/case\s+"(\w+)":([\s\S]*?)break;/g)) {
+              const t = m[1], body = m[2];
+              const fields = uniq([...body.matchAll(/el\.([A-Za-z_]\w*)/g)].map((x) => x[1])).filter((f) => !GENERIC.has(f));
+              for (const f of fields) required.push([t, f]);
+              for (const mm of body.matchAll(/message:\s*"([^"]*)"/g)) {
+                const tok = /缺\s*([A-Za-z_][\w.]*)/.exec(mm[1]);
+                if (tok) required.push([t, tok[1].split(".")[0]]);
+              }
+            }
+            const missing = uniq(required.map(([, f]) => f)).filter((f) => !new RegExp(`\\b${f}\\b`).test(s5));
+            console.log("  required fields:", uniq(required.map(([t, f]) => `${t}:${f}`)).join(" "));
+            if (missing.length) fail(`① validate.js 必填字段未在 pptd.md §5 记录: ${missing.join(", ")}`);
+            else ok(`① 类型必填字段均在 pptd §5 出现（${required.length} 处）`);
+          }
+
+          // ---- ② Theme 键名 ----
+          {
+            const tp = await import(pathToFileURL(join(ENGINE, "packages/model/theme-presets.js")).href);
+            const engineKeys = Object.keys(tp.DEFAULT_THEME).sort();
+            const pptd = read("references/pptd.md");
+            const block = /interface Theme \{([\s\S]*?)\}/.exec(pptd);
+            if (!block) fail("② pptd.md 找不到 interface Theme 块");
+            else {
+              const mdKeys = uniq([...block[1].matchAll(/^\s*(\w+)\??\s*:/gm)].map((m) => m[1])).sort();
+              console.log("  engine Theme keys:", engineKeys.join(","));
+              console.log("  pptd Theme keys  :", mdKeys.join(","));
+              if (!eqSet(engineKeys, mdKeys)) fail("② pptd.md §3 Theme 键名与 DEFAULT_THEME 不一致");
+              else ok(`② Theme 键名一致（${engineKeys.length}）`);
+            }
+          }
+
+          // ---- ③ 形状 / 连接线计数 ----
+          {
+            const data = await import(pathToFileURL(join(ENGINE, "packages/model/preset-geometry.data.js")).href);
+            const keys = Object.keys(data.PRESET_SHAPES);
+            const CONNECTOR_RE = /^(straight|bent|curved)Connector\d*$|^line$/;
+            const connectors = keys.filter((k) => CONNECTOR_RE.test(k));
+            const dataShapes = keys.filter((k) => !CONNECTOR_RE.test(k));
+            const md = read("references/shapes.md");
+            const mdShapes = uniq([...md.matchAll(/^\|\s*([A-Za-z_][A-Za-z0-9_]*)\s*\|/gm)].map((m) => m[1]))
+              .filter((n) => n !== "shapeName");
+            console.log(`  engine: ${keys.length} = ${dataShapes.length} shapes + ${connectors.length} connectors; shapes.md: ${mdShapes.length} shapes`);
+            if (mdShapes.length !== dataShapes.length) fail(`③ shapes.md 形状数 ${mdShapes.length} 与引擎 ${dataShapes.length} 不一致`);
+            else if (connectors.length !== 10) fail(`③ 引擎连接线数 ${connectors.length} 与约定 10 不一致`);
+            else if (mdShapes.some((n) => !dataShapes.includes(n))) fail("③ shapes.md 含引擎未定义的形状名");
+            else ok(`③ shapes.md ${mdShapes.length} 形状 + ${connectors.length} 连接线 与引擎一致`);
+          }
+
+          // ---- ④ 字体注册名 ----
+          {
+            const reg = JSON.parse(readFileSync(join(ENGINE, "assets/fonts/registry.json"), "utf8"));
+            const engineFamilies = uniq((reg.fonts || []).map((f) => f.family)).sort();
+            const md = read("references/design.md");
+            const s4 = md.slice(md.indexOf("## Built-in Font Library"), md.indexOf("## System Fonts"));
+            const mdFamilies = uniq([...s4.matchAll(/^\|[^|]*\|\s*`([^`]+)`\s*\|/gm)].map((m) => m[1].trim())).sort();
+            console.log(`  registry: ${engineFamilies.length} families; design.md §4: ${mdFamilies.length} families`);
+            const missing = engineFamilies.filter((f) => !mdFamilies.includes(f));
+            const extra = mdFamilies.filter((f) => !engineFamilies.includes(f));
+            if (missing.length || extra.length) fail(`④ 字体注册名不一致 缺:${missing.join(",") || "-"} 多:${extra.join(",") || "-"}`);
+            else ok(`④ 字体注册名一致（${engineFamilies.length}）`);
+          }
+
+          // ---- ⑤ design.md 预设色值表 vs THEME_PALETTES ----
+          // 原 tests/regression/theme-presets.mjs §2 的守护点：文档迁到本仓后仍保留，
+          // 防止 design.md 的 10 套预设色值与引擎 THEME_PALETTES 漂移。
+          {
+            const tp = await import(pathToFileURL(join(ENGINE, "packages/model/theme-presets.js")).href);
+            const PAL = tp.THEME_PALETTES;
+            const ORDER = Object.keys(PAL);
+            const md = read("references/design.md");
+            const mainKeys = ["primary", "accent", "accent3", "accent4", "accent5", "accent6"];
+            const restKeys = ["text", "muted", "line", "success", "warning", "danger", "primarySoft", "primaryTint", "primaryDeep"];
+            let checked = 0, bad = 0;
+            const mainTbl = md.split("Primary and chart series colors")[1]?.split("The remaining 11 keys")[0] ?? "";
+            for (const row of mainTbl.split("\n").filter((l) => new RegExp(`^\\| (${ORDER.join("|")}) \\|`).test(l))) {
+              const c = row.split("|").map((s) => s.trim());
+              const code = mainKeys.map((k) => PAL[c[1]].colors[k].toUpperCase());
+              if (JSON.stringify(c.slice(2, 8)) !== JSON.stringify(code)) bad++;
+              checked++;
+            }
+            const restTbl = md.split("The remaining 11 keys")[1]?.split("> Usage:")[0] ?? "";
+            for (const row of restTbl.split("\n").filter((l) => new RegExp(`^\\| (${restKeys.join("|")}) \\|`).test(l))) {
+              const c = row.split("|").map((s) => s.trim());
+              for (let i = 0; i < ORDER.length; i++) {
+                if (c[i + 2].toUpperCase() !== PAL[ORDER[i]].colors[c[1]].toUpperCase()) bad++;
+              }
+              checked++;
+            }
+            console.log(`  design preset rows: ${checked} checked, ${bad} mismatches`);
+            if (checked === 0) fail("⑤ design.md 预设色值表未解析到任何行（文档结构可能已变）");
+            else if (bad) fail(`⑤ design.md 色值表与 THEME_PALETTES 有 ${bad} 处不符`);
+            else ok(`⑤ design.md 预设色值表与 THEME_PALETTES 一致（${checked} 行）`);
+          }
+
+          if (failures) {
+            console.log(`\n✗ drift-guard: ${failures} 项不符 — references 需随引擎更新（见上）`);
+            process.exit(1);
+          }
+          console.log("\n✓ drift-guard: 全部一致");
+          DRIFT_EOF
+          node "$CHECKER"
