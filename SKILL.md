@@ -19,7 +19,7 @@ open-pptd is a presentation creation and export skill built around the **PPTD fo
 1. the complete editable PPTD project directory (`.pptd` manifest + `pages/*.page` + `media/` and other referenced dependencies);
 2. the matching locally generated `.pptx`, with fonts embedded and fade slide transitions applied by default.
 
-## 前置：确认 CLI 可用
+## Prerequisite: verify the CLI is available
 
 The engine and CLI live **outside this skill**. This skill is a pure knowledge/text pack; all preview, validation, render, and export actions are performed by the `open-pptd` command-line tool. Before doing anything else:
 
@@ -43,7 +43,7 @@ Run `open-pptd doctor` (the same command on all three platforms) — a single ca
 
 Do **not** declare `requires-cli` and do **not** check a version range — version governance belongs to whoever deploys the CLI. The skill only self-checks that the command exists; a missing command is already fail-fast.
 
-## 预览（Preview）
+## Preview
 
 `open-pptd serve` is the only preview channel for standalone use:
 
@@ -59,7 +59,7 @@ open-pptd serve --project <project dir> --detach --json
 
 Embedded hosts (e.g. DeepSeek Harness) preview through `pptd_*` tools instead — **not implemented yet**; this section will be updated when it lands.
 
-## 导出（Export）
+## Export
 
 ```bash
 open-pptd export <manifest> [-o <out.pptx>]
@@ -88,8 +88,8 @@ Export runs an automatic pre-flight health check and fetches on demand **only** 
    Preview, checking, and PPTX export are done by running the `open-pptd` CLI (`open-pptd serve|export|check`). **Do not read any source code by default** — this skill contains only `SKILL.md` and `references/`; the engine source is not shipped with it. Only if an unsolvable problem is hit (format doubts, export anomalies, editor anomalies), obtain and consult the engine source to locate the root cause, and stop once fixed.
 
 1. **Format baseline**: strictly implement per `references/pptd.md`; the export target is a PPTX that opens in PowerPoint without repair and renders identically to the editor preview.
-2. **Export pipeline**: `open-pptd export <deck.pptd> [-o <out.pptx>]` (self-developed writer, no browser dependency; export runs the automatic pre-flight described in the 导出 section).
-3. **Online preview/editing**: `open-pptd serve --project <project dir>` → the local editor in a browser (self-developed); use the detached form in the 预览 section. In the agent flow, start it **as soon as the manifest is written** (before generating pages) so the user watches pages appear in real time — the editor live-reloads on every file change (SSE). Start it detached so the session is not blocked (exact pattern in the 预览 section).
+2. **Export pipeline**: `open-pptd export <deck.pptd> [-o <out.pptx>]` (self-developed writer, no browser dependency; export runs the automatic pre-flight described in the Export section).
+3. **Online preview/editing**: `open-pptd serve --project <project dir>` → the local editor in a browser (self-developed); use the detached form in the Preview section. In the agent flow, start it **as soon as the manifest is written** (before generating pages) so the user watches pages appear in real time — the editor live-reloads on every file change (SSE). Start it detached so the session is not blocked (exact pattern in the Preview section).
 4. **Page images (strictly on demand)**: `open-pptd render <deck.pptd> [-o <dir>]` exports pages to PNG via the local headless browser (no window; same renderer as the preview; `--page <n>` single page, `--scale <1|2|3>`). Run it **only** under the trigger rules in step4 — never for models that cannot read images (the PNGs would be useless).
 5. **No pptx → pptd conversion**: an existing `.pptx` cannot be imported into a `.pptd` project. Edit/replicate tasks start from a `.pptd` project (user-provided or newly created); for a user-uploaded `.pptx`, unpack and inspect it as reference (colors/layout/copy), then rebuild in a `.pptd` project — element-by-element restoration is not guaranteed.
 6. **Chart limits**: all 13 types export. 11 (bar/line/area/scatter/bubble/candlestick/pie/radar/waterfall/treemap/sunburst) export as native PowerPoint charts (fully editable); heatmap/sankey (PowerPoint has no native types) export as **vector images** (SVG-based picture — renders in PowerPoint 2019+/365/WPS/LibreOffice, invisible in older versions, data not editable in PPT). Combo charts are fully supported: mix bar/line/area/scatter/bubble freely and use a `yAxis` array + `yAxisIndex` for secondary axes.
@@ -140,7 +140,7 @@ Rules:
 **Generation order — manifest first, live preview throughout:**
 1. Create the project directory (`pages/`, `media/`).
 2. Write `deck.pptd` with the complete page list + theme + fonts declarations. (Missing page files are fine — the editor skips them, and they appear automatically as they land on disk.)
-3. **Start the live preview immediately** (detached, do not block the session) — use the exact command in the 预览 section:
+3. **Start the live preview immediately** (detached, do not block the session) — use the exact command in the Preview section:
    ```bash
    open-pptd serve --project /abs/path/project --detach --json
    # stdout is one line of JSON: {"url":"http://127.0.0.1:55173/editor/?deck=project/deck.pptd","port":55173,"pid":4812}
@@ -173,7 +173,7 @@ Rules:
 ### step4. Validation
 
 1. **Structural review — always**: validate the generated pptd against `references/pptd.md` (required fields, types, bounds, theme tokens, resource paths, contrast, overflow-prone long text, hierarchy, layout density) and repair issues over multiple rounds. Run `open-pptd check <deck.pptd>` for a schema/token/resource/font/geometry/contrast report per page with element ids.
-2. **Live preview — the primary QA channel** (already running since step3): the user watches pages appear in real time and reports issues; fix them in the corresponding `.page` files (the editor live-reloads on file changes). If the preview is not running for any reason, restart it with the 预览 command and hand the URL to the user.
+2. **Live preview — the primary QA channel** (already running since step3): the user watches pages appear in real time and reports issues; fix them in the corresponding `.page` files (the editor live-reloads on file changes). If the preview is not running for any reason, restart it with the Preview command and hand the URL to the user.
 3. **Visual self-review — strictly on demand**. Run render **only when all three conditions hold**:
    a. the user explicitly asks the agent to check/fix the visuals itself (e.g. "你自己检查调整一下布局"), or the task's core is visual fidelity (1:1 image/PDF replication, style transfer) and the user wants the agent to verify;
    b. the current model can actually read images (if unsure, render one page first and try to read the PNG — if you cannot see it, stop and skip);
@@ -209,7 +209,7 @@ Rules:
    ```
 
 2. Generate the `.pptx` by default after validation, even when the user only asks to create or edit a presentation. Skip PPTX export only when the user explicitly requests PPTD-only output or the environment cannot run the exporter; in the latter case, report the exact blocker and still deliver the complete PPTD project.
-3. Export (local writer, no browser needed; a project directory may be passed instead of the manifest only when it contains exactly one `.pptd` file; export auto-checks and on-demand-fetches referenced resources per the 导出 section):
+3. Export (local writer, no browser needed; a project directory may be passed instead of the manifest only when it contains exactly one `.pptd` file; export auto-checks and on-demand-fetches referenced resources per the Export section):
 
    ```bash
    open-pptd export /abs/path/project/deck.pptd -o /abs/path/project/deck.pptx
@@ -226,5 +226,5 @@ Rules:
 5. Default PPTX options: fade transition written to every slide by the local writer; font embedding enabled by default (`--no-embed-fonts` disables), subsetting kept by default (`--full-fonts` switches to complete fonts for edit-after-export — see constraint 11 for when); embedded fonts are resolved automatically per the registered-name rule in constraint 11.
 6. After export, verify the output exists and report the generated path. Confirm that every slide has exactly one root-level fade transition in valid CT_Slide order (`cSld`, optional `clrMapOvr`, `transition`, optional `timing/extLst`) by unzipping the PPTX and inspecting `ppt/slides/slideN.xml`. Do not claim PowerPoint/WPS/Keynote playback compatibility solely because export succeeded.
 7. Deliver with normal clickable local links using absolute paths. In the final response, link: the project directory; the `.pptd` manifest; the `pages/` and `media/` directories when present; the generated `.pptx`.
-8. When the user wants to open, edit, save, or export a PPTD project manually: start the local browser editor with `open-pptd serve --project <project dir>` (use the detached form in the 预览 section) and ask the user to open the returned local URL. The editor supports preview, editing, saving back to the project, and one-click PPTX export (or `open-pptd render <deck.pptd> -o <dir>` to export page images).
+8. When the user wants to open, edit, save, or export a PPTD project manually: start the local browser editor with `open-pptd serve --project <project dir>` (use the detached form in the Preview section) and ask the user to open the returned local URL. The editor supports preview, editing, saving back to the project, and one-click PPTX export (or `open-pptd render <deck.pptd> -o <dir>` to export page images).
 9. Always end the final response with the **preview status** and a concise next step: if the preview server is still running, give the URL and how to stop it (`open-pptd serve --stop`), or offer to keep it running for further editing; if it was stopped, give the restart command (`open-pptd serve --project <project dir> --detach --json`). Keep this reminder in addition to — not instead of — the required project and file links.
