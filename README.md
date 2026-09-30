@@ -1,10 +1,6 @@
 # open-pptd-skill
 
-**[open-pptd](https://github.com/Shingwha/open-pptd) 的内容面（知识包）**——围绕 **PPTD 格式**（把 OOXML 抽象为自包含页面的 YAML 中间 DSL）构建的演示文稿创作与导出技能。
-
-English: [README.en.md](README.en.md)
-
-本仓库是纯文本：`SKILL.md` 与它链接的 `references/`。**不含任何可执行文件**——没有脚本、没有构建、没有依赖。所有预览、校验、渲染、导出动作都由引擎仓的 `open-pptd` 命令行工具完成。
+**[open-pptd](https://github.com/Shingwha/open-pptd) 的内容面（知识包）**——围绕 **PPTD 格式**（把 OOXML 抽象为自包含页面的 YAML 中间 DSL）构建的演示文稿创作与导出技能。本仓库是纯文本：`SKILL.md` 与它链接的 `references/`。**不含任何可执行文件**——没有脚本、没有构建、没有依赖。所有预览、校验、渲染、导出动作都由引擎仓的 `open-pptd` 命令行工具完成。
 
 ```
 open-pptd-skill/
