@@ -18,7 +18,7 @@ open-pptd-skill/
 │   ├── pptd.md                 # the PPTD v2 format spec (single source of truth)
 │   ├── shapes.md               # preset shape lookup table (177 shapes + parameters)
 │   └── slides_categories/      # per-scenario deep dives (×8)
-├── README.md
+├── README.md / README.en.md
 ├── LICENSE
 └── .github/workflows/drift-guard.yml
 ```
