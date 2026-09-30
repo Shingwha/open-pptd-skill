@@ -123,17 +123,18 @@ Read **all files uploaded by the user**, the provided URLs, and `references/pptd
 
 Read `references/design.md` **in full, once** — every later design decision (interview options, palette, font pairing) comes from this read.
 
-**Requirements interview — ask once, in one round.** For each dimension: skip if the user already specified it; ask if it is not specified; on "you decide", fall back to the best practice.
+**Requirements interview — one round, plan-first.** Cover every dimension below in one message, each with your concrete plan (the default you will apply); the user overrides whatever they care about in a single reply, and anything left unaddressed falls back to that stated plan. Ask an explicit question only where no sensible default exists.
 
 1. **Style**: offer 2-3 **named combinations** (scenario × visual style × light mode) from design.md §2 — e.g. "analysis-decision × `consulting-classic` × all-light" (the default pairing) vs "analysis-decision × `data-journalism` × all-dark" — instead of adjectives like "business" or "tech"; or follow a user-provided reference image/template/brand guide.
 2. **Page count**: user-specified count takes priority; a page-by-page outline/script matches its own page count; with a complete structured document or a bare topic, decide yourself based on the content/search results — if the user is unsure, propose a count and confirm.
 3. **Layout**: canvas ratio (default 16:9); cover / table of contents / section dividers / summary pages; per-page information density (sparse vs dense); any required page types.
 4. **Content**: whether the provided material is complete or the model should expand it (search for more material, cases, data), and whether sources/citations are required.
+5. **Speaker notes**: always surface this in the interview plan. Notes are written **only on explicit confirmation** — the user opts in (ideally choosing cue-style talking points vs. a full script), or the input itself is a speech script (then the script feeds the notes directly, no re-asking). Default when the user does not opt in: no `notes` on any page.
 
 Rules:
 - The user's explicit requirements always take priority over any default; do not re-ask what the user already answered.
-- On delegation ("you decide"), proceed with best practice: pick the style from the scenario guides, decide the page count from the content structure, follow the general rules in design.md §1, and expand content with search when the input type allows it.
-- After the interview, state the confirmed decisions in **one short paragraph** before generating, so the deck stays aligned with expectations. It must cover: page count / layout / content expansion, plus the **design anchors** — visual style name (a design.md §2 entry or a one-sentence custom contract), light mode (all-light / sandwich / all-dark), signature motif (a repeating element group; never a color bar/stripe or decorative title underline), font pairing (≤2 families from design.md §4), and a size scale of 5-8 anchors used across the whole deck.
+- On delegation ("you decide"), proceed with best practice: pick the style from the scenario guides, decide the page count from the content structure, follow the general rules in design.md §1, and expand content with search when the input type allows it — except speaker notes, whose fallback is always "no notes".
+- After the interview, state the confirmed decisions in **one short paragraph** before generating, so the deck stays aligned with expectations. It must cover: page count / layout / content expansion, speaker notes (confirmed yes — cue style or full script; or the default no), plus the **design anchors** — visual style name (a design.md §2 entry or a one-sentence custom contract), light mode (all-light / sandwich / all-dark), signature motif (a repeating element group; never a color bar/stripe or decorative title underline), font pairing (≤2 families from design.md §4), and a size scale of 5-8 anchors used across the whole deck.
 
 ### step3. Generate
 
@@ -158,7 +159,7 @@ Rules:
 **Generation discipline (every deck)**:
 - Same-kind entry pages repeat the signature motif with only its state changing; distinct page kinds (cover, section dividers, closing, special pages) get their own composition instead of reusing the entry-page template.
 - Alternate text-driven, image-driven, and data-driven pages; every page keeps one focal point and at least one visual element (positive layout vocabulary: design.md §1 step1).
-- `notes` is the speaker note, not a page annotation. Write what the presenter says while showing the page — the opening line, which numbers to read aloud (with their source years), the transition to the next page. Never page/design explanations, content summaries, or generation self-checks; omit the field entirely when there is nothing to present.
+- `notes` is the speaker note, not a page annotation — and strictly **opt-in**: write notes only when the interview confirmed them (explicit yes, or the input itself is a speech script). When confirmed, write what the presenter says while showing the page — the opening line, which numbers to read aloud (with their source years), the transition to the next page; never page/design explanations, content summaries, or generation self-checks. When not confirmed, omit the field entirely on every page.
 
 **Mode-specific guidance**:
 
