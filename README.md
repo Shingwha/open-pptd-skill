@@ -1,25 +1,34 @@
 # open-pptd-skill
 
-**[open-pptd](https://github.com/Shingwha/open-pptd) 的内容面（知识包）**——围绕 **PPTD 格式**（把 OOXML 抽象为自包含页面的 YAML 中间 DSL）构建的演示文稿创作与导出技能。本仓库是纯文本：`SKILL.md` 与它链接的 `references/`。**不含任何可执行文件**——没有脚本、没有构建、没有依赖。所有预览、校验、渲染、导出动作都由引擎仓的 `open-pptd` 命令行工具完成。
+中文版: [README.zh-CN.md](README.zh-CN.md)
+
+The **content plane** (knowledge pack) for [open-pptd](https://github.com/Shingwha/open-pptd) — a
+presentation creation and export skill built around the **PPTD format**, a YAML intermediate DSL
+that abstracts OOXML into self-contained pages.
+
+This repository is pure text: `SKILL.md` plus the `references/` it links to. It contains **no
+executable files** — no scripts, no build step, no dependencies. All preview, validation, render,
+and export actions are performed by the `open-pptd` command-line tool from the engine repository.
 
 ```
 open-pptd-skill/
-├── SKILL.md                    # 技能入口（方法论 + CLI 命令面）
+├── SKILL.md                    # the skill entry point (methodology + CLI command surface)
 ├── references/
-│   ├── design.md               # 场景指南、视觉风格、配色、字体系统
-│   ├── pptd.md                 # PPTD v2 格式规范（唯一事实来源）
-│   ├── shapes.md               # 预置形状速查表（177 形状 + 参数）
-│   └── slides_categories/      # 分场景深入指南（×8）
-├── README.md / README.en.md
+│   ├── design.md               # scenario guide, visual styles, palette, font system
+│   ├── pptd.md                 # the PPTD v2 format spec (single source of truth)
+│   ├── shapes.md               # preset shape lookup table (177 shapes + parameters)
+│   └── slides_categories/      # per-scenario deep dives (×8)
+├── README.md / README.zh-CN.md
 ├── LICENSE
 └── .github/workflows/drift-guard.yml
 ```
 
-## 1. 先装 CLI
+## 1. Install the CLI first
 
-技能只知道 CLI 的**命令面**，它自己不能画、不能校验、不能导出。每台机器装一次（装到 `~/.open-pptd`，不需要管理员）：
+The skill only knows the **command surface** of the CLI; it cannot draw, check, or export on its
+own. Install the CLI once per machine (into `~/.open-pptd`, no administrator needed):
 
-**Windows（PowerShell）**
+**Windows (PowerShell)**
 
 ```powershell
 irm https://raw.githubusercontent.com/Shingwha/open-pptd/main/install.ps1 | iex
@@ -31,50 +40,61 @@ irm https://raw.githubusercontent.com/Shingwha/open-pptd/main/install.ps1 | iex
 curl -fsSL https://raw.githubusercontent.com/Shingwha/open-pptd/main/install.sh | sh
 ```
 
-安装器从 GitHub Releases 下载最新运行时 zip、校验 SHA256、解压到 `~/.open-pptd/cli/versions/<ver>`、把 `~/.open-pptd/cli/bin` 加入**用户级** PATH，并默认安装 Font Awesome 图标资产。幂等可重复执行。可选：`-Version <ver>`（PowerShell）/ `--version <ver>`（sh）锁定版本；`-WhatIf` / `--dry-run` 预演步骤不落盘。
+The installer downloads the latest runtime zip from GitHub Releases, verifies its SHA256, unpacks it
+to `~/.open-pptd/cli/versions/<ver>`, adds `~/.open-pptd/cli/bin` to the **user-level** PATH, and
+installs the Font Awesome icon assets by default. It is idempotent and can be re-run safely.
+Options: `-Version <ver>` (PowerShell) / `--version <ver>` (sh) to pin a version, and
+`-WhatIf` / `--dry-run` to preview the steps without touching the system.
 
-验证安装：
+Verify the installation:
 
 ```sh
 open-pptd doctor
 ```
 
-如果找不到 `open-pptd`，先新开一个终端（PATH 变更对已运行的进程无效）。
+If `open-pptd` is not found, open a new terminal first (PATH changes do not affect already-running
+processes).
 
-## 2. 安装本技能
+## 2. Install this skill
 
-把本仓库复制（或 clone）到你所用 agent 的技能目录，使技能目录下出现一个同时包含 `SKILL.md` 与 `references/` 的 `open-pptd/` 文件夹：
+Copy (or clone) this repository into the skills directory of the agent you use, so that the skills
+directory contains an `open-pptd/` folder holding `SKILL.md` and `references/` together:
 
 ```sh
-git clone https://github.com/Shingwha/open-pptd-skill.git <你的技能目录>/open-pptd
+git clone https://github.com/Shingwha/open-pptd-skill.git <your-skills-dir>/open-pptd
 ```
 
-常见位置（按你的 agent 调整）：
+Typical locations (adjust to your agent):
 
-| Agent | 技能目录（示例） |
+| Agent | Skills directory (example) |
 |---|---|
 | ZCode | `~/.zcode/skills/` |
-| Claude Code | 项目/会话技能目录 |
-| pi 及其他 | 该 agent 配置的技能目录 |
+| pi / others | the skills directory configured for that agent |
+| Claude Code | the project/session skills folder |
 
-要求只有一条：`SKILL.md` 与 `references/` 位于**同一目录**——这是标准 Agent Skills 布局，`SKILL.md` 以相对路径引用 `references/*`。
+The requirement is only that `SKILL.md` and `references/` stay in the **same directory** — that is
+the standard Agent Skills layout. `SKILL.md` references `references/*` with relative paths.
 
-> 装技能**不会**装 CLI，反之亦然。这个拆分是有意的：引擎按自己的节奏发版，技能只依赖稳定的命令面（`serve` / `check` / `export` / `ensure` / `render` / `assets` / `fonts` / `doctor` / …）。
+> Installing the skill does **not** install the CLI, and vice versa. This split is deliberate: the
+> engine evolves on its own release cadence, while this skill only depends on the stable command
+> surface (`serve` / `check` / `export` / `ensure` / `render` / `assets` / `fonts` / `doctor` / …).
 
-## 3. 漂移守卫
+## 3. Drift guard
 
-`references/` 是手写文档，但它描述的契约存在于引擎代码中。`drift-guard` 工作流（`.github/workflows/drift-guard.yml`）拉取引擎最新 release，对其做五项只读比对（前四项为规定动作）：
+`references/` is hand-written prose, but it describes contracts that live in the engine code. The
+`drift-guard` workflow (`.github/workflows/drift-guard.yml`) pulls the latest engine release and
+performs five read-only comparisons against it (the first four are the mandated ones):
 
-1. `pptd.md §5` 各类型必填字段 ↔ 引擎 `validate.js` schema 键集合；
-2. `pptd.md §3` Theme 结构 ↔ `theme.js` / `theme-presets.js` 键名；
-3. `shapes.md` 形状/连接线数量 ↔ `scripts/gen-preset-geometry.mjs` 几何数据计数；
-4. `design.md §4` 注册字体名 ↔ `assets/fonts/registry.json` family/alias 集合；
-5. `design.md` 预设配色表 ↔ `theme-presets.js` `THEME_PALETTES`（继承自引擎原 `tests/regression/theme-presets.mjs` 的守卫，文档迁入本仓后随之落地于此）。
+1. `pptd.md §5` per-type required fields ↔ the engine's `validate.js` schema key set;
+2. `pptd.md §3` Theme structure ↔ `theme.js` / `theme-presets.js` key names;
+3. `shapes.md` shape/connector counts ↔ `scripts/gen-preset-geometry.mjs` geometry data counts;
+4. `design.md §4` registered font names ↔ `assets/fonts/registry.json` family/alias set;
+5. `design.md` preset color tables ↔ `theme-presets.js` `THEME_PALETTES` (the guard inherited from the
+   engine's former `tests/regression/theme-presets.mjs`, kept here now that the doc lives in this repo).
 
-任何不一致都会让工作流失败，并提示 `references/` 需要更新以对齐引擎。该检查纯只读，不引入两个仓库之间的依赖。
+Any mismatch fails the workflow with a message that `references/` must be updated to match the
+engine. The check is purely read-only and introduces no dependency between the two repositories.
 
 ## License
 
-MIT — 见 [LICENSE](LICENSE)。
-
-English: [README.en.md](README.en.md)
+MIT — see [LICENSE](LICENSE).
